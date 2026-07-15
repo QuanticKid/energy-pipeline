@@ -1,4 +1,4 @@
-from db import get_connection
+from app.db import get_connection
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS nuclear_generation (

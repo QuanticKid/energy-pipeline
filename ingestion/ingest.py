@@ -5,7 +5,7 @@ import time
 import requests
 from dotenv import load_dotenv
 
-from db import get_connection
+from app.db import get_connection
 
 load_dotenv()
 
