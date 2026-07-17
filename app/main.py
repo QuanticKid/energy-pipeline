@@ -85,3 +85,31 @@ def daily_average(days: int = 7):
         }
         for day, avg, min_mw, max_mw, samples in rows
     ]
+NUCLEAR_SHARE_SQL = """
+SELECT
+    n.start_time,
+    n.value_mw AS nuclear_mw,
+    t.value_mw AS total_mw,
+    round(100.0 * n.value_mw / t.value_mw, 2) AS share_pct
+FROM nuclear_generation n
+JOIN total_generation t ON n.start_time = t.start_time
+WHERE t.value_mw > 0
+ORDER BY n.start_time DESC
+LIMIT %s
+"""
+
+
+@app.get("/generation/nuclear-share")
+def nuclear_share(limit: int = 10):
+    with get_connection() as conn:
+        rows = conn.execute(NUCLEAR_SHARE_SQL, (limit,)).fetchall()
+
+    return [
+        {
+            "start_time": start,
+            "nuclear_mw": float(nuclear),
+            "total_mw": float(total),
+            "share_pct": float(share),
+        }
+        for start, nuclear, total, share in rows
+    ]
