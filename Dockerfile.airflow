@@ -1,0 +1,6 @@
+FROM apache/airflow:2.10.5-python3.12
+
+# Only the packages the ingestion code needs. Airflow pins its own dependency
+# tree, so installing the full requirements.txt risks version conflicts.
+COPY requirements-airflow.txt /tmp/requirements-airflow.txt
+RUN pip install --no-cache-dir -r /tmp/requirements-airflow.txt
