@@ -1,7 +1,3 @@
-import pytest
-from airflow.models import DagBag
-
-
 from pathlib import Path
 
 import pytest
@@ -14,11 +10,6 @@ DAG_FOLDER = Path(__file__).parent.parent / "dags"
 def dagbag() -> DagBag:
     # include_examples=False keeps Airflow's bundled demo DAGs out of the run.
     return DagBag(dag_folder=str(DAG_FOLDER), include_examples=False)
-
-@pytest.fixture(scope="module")
-def dagbag() -> DagBag:
-    # include_examples=False keeps Airflow's bundled demo DAGs out of the run.
-    return DagBag(dag_folder="/opt/airflow/dags", include_examples=False)
 
 
 def test_no_import_errors(dagbag):
