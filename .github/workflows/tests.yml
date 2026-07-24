@@ -17,6 +17,17 @@ jobs:
       - name: Build Airflow image
         run: docker build -f Dockerfile.airflow -t energy-pipeline-test .
 
+- name: Debug mounted paths
+        run: |
+          echo "--- host ---"
+          ls -la dags
+          echo "--- container ---"
+          docker run --rm \
+            -v "$PWD/dags:/opt/airflow/project/dags:ro" \
+            --entrypoint bash \
+            energy-pipeline-test \
+            -c "ls -la /opt/airflow/project && ls -la /opt/airflow/project/dags"
+
       - name: Run tests
         run: |
           docker run --rm \
