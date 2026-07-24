@@ -17,16 +17,26 @@ jobs:
       - name: Build Airflow image
         run: docker build -f Dockerfile.airflow -t energy-pipeline-test .
 
-      - name: Debug mounted paths
+      - name: Debug DagBag
         run: |
-          echo "--- host ---"
-          ls -la dags
-          echo "--- container ---"
           docker run --rm \
             -v "$PWD/dags:/opt/airflow/project/dags:ro" \
+            -v "$PWD/ingestion:/opt/airflow/project/ingestion:ro" \
+            -v "$PWD/app:/opt/airflow/project/app:ro" \
+            -e PYTHONPATH=/opt/airflow/project \
+            -e FINGRID_API_KEY=dummy-key-for-tests \
             --entrypoint bash \
             energy-pipeline-test \
-            -c "ls -la /opt/airflow/project && ls -la /opt/airflow/project/dags"
+            -c "python -c \"
+          import logging, os
+          logging.basicConfig(level=logging.DEBUG)
+          from airflow.models import DagBag
+          b = DagBag(dag_folder='/opt/airflow/project/dags', include_examples=False)
+          print('AIRFLOW_HOME:', os.environ.get('AIRFLOW_HOME'))
+          print('DAGS:', list(b.dags))
+          print('ERRORS:', b.import_errors)
+          print('STATS:', b.dagbag_stats)
+          \""
 
       - name: Run tests
         run: |
