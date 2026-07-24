@@ -1,5 +1,7 @@
 # Energy Pipeline
 
+![Tests](https://github.com/QuanticKid/energy-pipeline/actions/workflows/tests.yml/badge.svg)
+
 ETL pipeline that collects Finnish electricity generation data from the
 [Fingrid Open Data API](https://data.fingrid.fi/), stores it in PostgreSQL,
 and serves it through a REST API built with FastAPI. Ingestion is orchestrated
@@ -15,24 +17,31 @@ exposes a derived metric: the nuclear share of total electricity generation.
 - PostgreSQL 16
 - Apache Airflow 2.10 (orchestration, LocalExecutor)
 - Docker + Docker Compose
+- pytest, GitHub Actions
 - `requests`, `psycopg`, `python-dotenv`
 
 ## Project structure
 
 ```
-app/                      # REST API
-  db.py                   # database connection
-  main.py                 # FastAPI app and routes
-ingestion/                # data collection
-  create_table.py         # creates both tables (idempotent)
-  ingest.py               # fetches one Fingrid source into PostgreSQL
+app/                          # REST API
+  db.py                       # database connection
+  main.py                     # FastAPI app and routes
+ingestion/                    # data collection
+  create_table.py             # creates both tables (idempotent)
+  ingest.py                   # fetches one Fingrid source into PostgreSQL
 dags/
-  fingrid_ingest.py       # Airflow DAG that schedules the ingestion
-Dockerfile                # image for the api service
-Dockerfile.airflow        # Airflow image plus the ingestion dependencies
-docker-compose.yml        # db + api + Airflow, one command to run it all
+  fingrid_ingest.py           # Airflow DAG that schedules the ingestion
+tests/
+  test_fetch_page.py          # HTTP retry logic, no network access
+  test_dag_integrity.py       # DAG structure, parsed through DagBag
+  test_ingest_idempotency.py  # ON CONFLICT behaviour, needs PostgreSQL
+.github/workflows/
+  tests.yml                   # runs the suite on every push and pull request
+Dockerfile                    # image for the api service
+Dockerfile.airflow            # Airflow image plus the ingestion dependencies
+docker-compose.yml            # db + api + Airflow, one command to run it all
 requirements.txt
-requirements-airflow.txt  # only what the DAG needs, to avoid version clashes
+requirements-airflow.txt      # only what the DAG needs, to avoid version clashes
 ```
 
 ## How it works
@@ -73,6 +82,33 @@ often it is retried, and what happens on failure. Every source is a task with
 its own status, its own log file per attempt, and a `Clear task` button that
 re-runs just that task inside an existing run. The ingestion functions
 themselves did not change; the DAG only calls them.
+
+## Tests
+
+```bash
+docker compose exec airflow-scheduler bash -c "cd /opt/airflow/project && python -m pytest tests -v"
+```
+
+The suite runs inside the Airflow image, so the DAG is parsed by the same
+Airflow version the project ships with.
+
+`fetch_page` is covered with a fake session: the 429 retry path is exercised
+without network access and without waiting for the real backoff. DAG integrity
+is checked through `DagBag`, which catches import errors, a changed task set,
+broken dependencies and missing retries before the scheduler silently drops the
+DAG.
+
+Three tests need PostgreSQL and verify that re-inserting the same rows adds
+nothing. They are skipped unless `RUN_DB_TESTS=1` is set, because they delete
+the contents of `nuclear_generation`:
+
+```bash
+docker compose exec -e RUN_DB_TESTS=1 airflow-scheduler bash -c "cd /opt/airflow/project && python -m pytest tests -v"
+```
+
+GitHub Actions builds the Airflow image on every push and pull request, starts a
+throwaway PostgreSQL service, and runs the full suite including the DB-backed
+tests.
 
 ## Quick start (Docker)
 
