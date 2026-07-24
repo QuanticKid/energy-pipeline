@@ -83,6 +83,7 @@ services:
       - ./ingestion:/opt/airflow/project/ingestion
       - ./app:/opt/airflow/project/app
       - ./tests:/opt/airflow/project/tests
+      - ./dags:/opt/airflow/project/dags
     depends_on:
       airflow-db:
         condition: service_healthy

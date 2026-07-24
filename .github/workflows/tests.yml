@@ -9,6 +9,22 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: energy_test
+        ports:
+          - 5432:5432
+        # Without a healthcheck the tests can start before Postgres accepts
+        # connections.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -17,36 +33,22 @@ jobs:
       - name: Build Airflow image
         run: docker build -f Dockerfile.airflow -t energy-pipeline-test .
 
-      - name: Debug DagBag
-        run: |
-          docker run --rm \
-            -v "$PWD/dags:/opt/airflow/project/dags:ro" \
-            -v "$PWD/ingestion:/opt/airflow/project/ingestion:ro" \
-            -v "$PWD/app:/opt/airflow/project/app:ro" \
-            -e PYTHONPATH=/opt/airflow/project \
-            -e FINGRID_API_KEY=dummy-key-for-tests \
-            --entrypoint bash \
-            energy-pipeline-test \
-            -c "python -c \"
-          import logging, os
-          logging.basicConfig(level=logging.DEBUG)
-          from airflow.models import DagBag
-          b = DagBag(dag_folder='/opt/airflow/project/dags', include_examples=False)
-          print('AIRFLOW_HOME:', os.environ.get('AIRFLOW_HOME'))
-          print('DAGS:', list(b.dags))
-          print('ERRORS:', b.import_errors)
-          print('STATS:', b.dagbag_stats)
-          \""
-
       - name: Run tests
         run: |
           docker run --rm \
+            --network host \
             -v "$PWD/tests:/opt/airflow/project/tests:ro" \
             -v "$PWD/dags:/opt/airflow/project/dags:ro" \
             -v "$PWD/ingestion:/opt/airflow/project/ingestion:ro" \
             -v "$PWD/app:/opt/airflow/project/app:ro" \
             -e PYTHONPATH=/opt/airflow/project \
             -e FINGRID_API_KEY=dummy-key-for-tests \
+            -e RUN_DB_TESTS=1 \
+            -e DB_HOST=localhost \
+            -e DB_PORT=5432 \
+            -e DB_NAME=energy_test \
+            -e DB_USER=postgres \
+            -e DB_PASSWORD=postgres \
             --entrypoint bash \
             energy-pipeline-test \
             -c "cd /opt/airflow/project && python -m pytest tests -v -p no:cacheprovider"
