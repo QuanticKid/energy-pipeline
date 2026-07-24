@@ -1,0 +1,31 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tests run inside the Airflow image so the DAG is parsed by the exact
+      # Airflow version the project ships with.
+      - name: Build Airflow image
+        run: docker build -f Dockerfile.airflow -t energy-pipeline-test .
+
+      - name: Run tests
+        run: |
+          docker run --rm \
+            -v "$PWD/tests:/opt/airflow/project/tests:ro" \
+            -v "$PWD/dags:/opt/airflow/project/dags:ro" \
+            -v "$PWD/ingestion:/opt/airflow/project/ingestion:ro" \
+            -v "$PWD/app:/opt/airflow/project/app:ro" \
+            -e PYTHONPATH=/opt/airflow/project \
+            -e FINGRID_API_KEY=dummy-key-for-tests \
+            --entrypoint bash \
+            energy-pipeline-test \
+            -c "cd /opt/airflow/project && python -m pytest tests -v -p no:cacheprovider"
